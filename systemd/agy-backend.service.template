@@ -1,0 +1,17 @@
+[Unit]
+Description=Antigravity Headless Backend (No VNC/X11)
+After=network.target
+Wants=agy-web-gateway.service
+
+[Service]
+Type=simple
+WorkingDirectory=__WORKSPACE_DIR__
+EnvironmentFile=__PROJECT_ROOT__/config.env
+ExecStart=/usr/bin/env bash __PROJECT_ROOT__/backend/start_backend.sh
+Restart=always
+RestartSec=3
+KillMode=control-group
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

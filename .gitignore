@@ -1,0 +1,23 @@
+# Local runtime configuration & secrets
+config.env
+*.env.local
+.env
+
+# Logs & runtime artifacts
+*.log
+*.pid
+*.sock
+logs/
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node / temporary files
+node_modules/
+tmp/

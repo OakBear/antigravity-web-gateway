@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Antigravity Web Gateway</title>
+  <style>
+    :root {
+      --bg: #faf4e5;
+      --card: #fffdf7;
+      --border: #e5dcc5;
+      --fg: #344044;
+      --muted: #6f7c80;
+      --accent: #cb4b16;
+      --ok: #2e7d32;
+      --warn: #b26a00;
+      --err: #c62828;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    h1 { margin: 0; font-size: 22px; }
+    .sub { color: var(--muted); font-size: 13px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    button, a.btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--fg);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    button.primary, a.btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .val { font-size: 16px; font-weight: 700; word-break: break-all; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .ok { background: #e6f4ea; color: var(--ok); }
+    .err { background: #fce8e6; color: var(--err); }
+    .warn { background: #fef7e0; color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    th { color: var(--muted); font-weight: 600; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.04);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    pre {
+      margin: 0;
+      font-size: 12px;
+      overflow-x: auto;
+      background: rgba(0, 0, 0, 0.03);
+      padding: 10px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Antigravity WebUI Gateway</h1>
+        <div class="sub" id="meta">Loading gateway telemetry...</div>
+      </div>
+      <div class="actions">
+        <a class="btn primary" href="/?useWebSocket=true">打开 Antigravity WebUI</a>
+        <button id="btn-rediscover" type="button">重新探测后端端口</button>
+        <button id="btn-refresh" type="button">刷新状态</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">网关监听地址</div>
+        <div class="val" id="listen-addr">-</div>
+      </div>
+      <div class="card">
+        <div class="label">当前锁定后端端口</div>
+        <div class="val" id="backend-port">-</div>
+      </div>
+      <div class="card">
+        <div class="label">运行账号 / 主机</div>
+        <div class="val" id="user-host">-</div>
+      </div>
+      <div class="card">
+        <div class="label">网关运行时长</div>
+        <div class="val" id="uptime">-</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:8px;">候选端口实时探测结果</div>
+      <table>
+        <thead>
+          <tr>
+            <th>端口</th>
+            <th>连通性</th>
+            <th>HTTP 状态</th>
+            <th>识别结果</th>
+          </tr>
+        </thead>
+        <tbody id="probes-body">
+          <tr><td colspan="4" class="sub">探测中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:8px;">配置路径与原始健康 JSON</div>
+      <pre id="raw-json">{}</pre>
+    </div>
+  </div>
+
+  <script>
+    function fmtDuration(sec) {
+      const s = Number(sec || 0);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const r = s % 60;
+      if (h > 0) return `${h}h ${m}m ${r}s`;
+      if (m > 0) return `${m}m ${r}s`;
+      return `${r}s`;
+    }
+
+    async function loadHealth() {
+      const btn = document.getElementById('btn-refresh');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/__agy_gateway_health', { cache: 'no-store' });
+        const data = await res.json();
+        document.getElementById('meta').textContent =
+          `service=${data.service} · workspace=${data.defaultWorkspace}`;
+        document.getElementById('listen-addr').textContent =
+          `${data.listening.host}:${data.listening.port}`;
+        const portEl = document.getElementById('backend-port');
+        portEl.innerHTML = data.activeBackendPort
+          ? `127.0.0.1:${data.activeBackendPort} <span class="badge ok">已连通</span>`
+          : `<span class="badge err">未找到后端</span>`;
+        document.getElementById('user-host').textContent = `${data.user}@${data.host}`;
+        document.getElementById('uptime').textContent = fmtDuration(data.uptimeSec);
+
+        const tbody = document.getElementById('probes-body');
+        const probes = Array.isArray(data.probes) ? data.probes : [];
+        if (probes.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="sub">当前没有发现候选端口</td></tr>';
+        } else {
+          tbody.innerHTML = probes
+            .map(({ port, result }) => {
+              const r = result || {};
+              const reach = r.reachable
+                ? '<span class="badge ok">可达</span>'
+                : '<span class="badge err">不可达</span>';
+              const tag = r.servesAppUi
+                ? '<span class="badge ok">Antigravity UI</span>'
+                : r.looksLikeDevTools
+                  ? '<span class="badge warn">DevTools (已忽略)</span>'
+                  : r.reachable
+                    ? '<span class="badge warn">非 UI 端口</span>'
+                    : '-';
+              return `<tr>
+                <td><code>127.0.0.1:${port}</code></td>
+                <td>${reach}</td>
+                <td>${r.status ?? '-'}</td>
+                <td>${tag}</td>
+              </tr>`;
+            })
+            .join('');
+        }
+        document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById('meta').textContent = `加载失败: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('btn-refresh').addEventListener('click', loadHealth);
+    document.getElementById('btn-rediscover').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-rediscover');
+      btn.disabled = true;
+      try {
+        await fetch('/__agy_gateway_rediscover', { method: 'POST' });
+        await loadHealth();
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    loadHealth();
+  </script>
+</body>
+</html>
